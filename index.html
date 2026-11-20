@@ -3,223 +3,735 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HHD Putaway & Pallet Mapper</title>
-    <!-- Lightweight Tailwind CSS for ultra-fast HHD rendering -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <title>WMS Putaway HHD - Pallet Mapper</title>
     <style>
-        /* Custom Industrial HHD Optimizations */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* High-contrast Slate 900 */
-            color: #f8fafc;
-            overscroll-behavior-y: contain;
+        /* Self-Contained Industrial Dark-Mode HHD Styles (Zero External Dependencies) */
+        :root {
+            --bg-body: #090d16;
+            --bg-card: #111827;
+            --bg-panel: #1f2937;
+            --bg-input: #030712;
+            --border-subtle: #374151;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --amber: #f59e0b;
+            --amber-bg: rgba(245, 158, 11, 0.15);
+            --sky: #0ea5e9;
+            --sky-hover: #0284c7;
+            --sky-bg: rgba(14, 165, 233, 0.15);
+            --emerald: #10b981;
+            --emerald-bg: rgba(16, 185, 129, 0.18);
+            --rose: #f43f5e;
+            --rose-bg: rgba(244, 63, 94, 0.18);
+            --indigo: #4f46e5;
+            --indigo-hover: #4338ca;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
             -webkit-tap-highlight-color: transparent;
         }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: 540px;
+            margin: 0 auto;
+            border-left: 1px solid #1e293b;
+            border-right: 1px solid #1e293b;
+            user-select: none;
+        }
+
         .mono {
-            font-family: 'JetBrains Mono', monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
-        /* Instant visual flash animations for scan feedback */
-        @keyframes flashSuccess {
-            0% { background-color: rgba(16, 185, 129, 0.35); }
+
+        /* Animations */
+        @keyframes flashGreen {
+            0% { background-color: rgba(16, 185, 129, 0.38); }
             100% { background-color: transparent; }
         }
-        @keyframes flashError {
-            0% { background-color: rgba(239, 68, 68, 0.45); }
+        @keyframes flashRed {
+            0% { background-color: rgba(244, 63, 94, 0.45); }
             100% { background-color: transparent; }
         }
-        .scan-success-flash {
-            animation: flashSuccess 0.35s ease-out;
+        .flash-success { animation: flashGreen 0.35s ease-out; }
+        .flash-error { animation: flashRed 0.45s ease-out; }
+
+        /* Header */
+        header {
+            background-color: #030712;
+            border-bottom: 1px solid #1f2937;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 30;
         }
-        .scan-error-flash {
-            animation: flashError 0.45s ease-out;
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        /* Custom scrollbar for compact HHD logs */
-        ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--emerald);
+            box-shadow: 0 0 8px var(--emerald);
         }
-        ::-webkit-scrollbar-track {
-            background: #1e293b;
+
+        .brand-title {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 4px;
+
+        .brand-sub {
+            font-size: 11px;
+            color: var(--emerald);
+            font-weight: 600;
+            display: block;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-icon {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .btn-csv {
+            background-color: #059669;
+            border: 1px solid #10b981;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-csv:active { transform: scale(0.96); }
+
+        /* Main Container */
+        main {
+            flex: 1;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Status Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .loc-card {
+            background-color: var(--bg-card);
+            border: 2px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 10px;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        .loc-card.active-amber {
+            border-color: var(--amber);
+            background-color: rgba(245, 158, 11, 0.06);
+        }
+
+        .loc-card.active-sky {
+            border-color: var(--sky);
+            background-color: rgba(14, 165, 233, 0.06);
+        }
+
+        .loc-card.locked-emerald {
+            border-color: var(--emerald);
+            background-color: rgba(16, 185, 129, 0.07);
+        }
+
+        .card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .card-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 5px;
+            background-color: var(--bg-panel);
+            color: var(--text-muted);
+        }
+        .badge.amber { background-color: var(--amber-bg); color: #fcd34d; }
+        .badge.sky { background-color: var(--sky-bg); color: #7dd3fc; }
+        .badge.emerald { background-color: var(--emerald-bg); color: #6ee7b7; }
+
+        .card-value {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 2px 0;
+        }
+        .card-value.amber { color: #fbbf24; }
+        .card-value.sky { color: #38bdf8; }
+        .card-value.emerald { color: #34d399; }
+
+        .card-hint {
+            font-size: 10px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        /* Pallet Progress Bar */
+        .progress-bar-box {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .qty-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .qty-current {
+            font-size: 17px;
+            font-weight: 800;
+            color: #38bdf8;
+        }
+
+        .qty-target-input {
+            width: 68px;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 800;
+            text-align: center;
+            padding: 4px;
+        }
+        .qty-target-input:focus {
+            outline: none;
+            border-color: var(--sky);
+        }
+
+        .bins-used {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+        .bins-used span {
+            color: #ffffff;
+            font-size: 14px;
+        }
+
+        /* Primary Scanner Box */
+        .scanner-box {
+            background-color: var(--bg-card);
+            border: 2px solid var(--sky);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 6px;
+        }
+
+        .step-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #fbbf24;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .step-title.sky { color: #38bdf8; }
+        .step-title.emerald { color: #34d399; }
+
+        .rule-pill {
+            font-size: 10px;
+            font-weight: 800;
+            background-color: #030712;
+            color: #7dd3fc;
+            border: 1px solid var(--border-subtle);
+            padding: 3px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .scan-input {
+            flex: 1;
+            min-width: 0;
+            background-color: var(--bg-input);
+            border: 2px solid #4b5563;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 18px;
+            font-weight: 800;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .scan-input:focus {
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+        }
+        .scan-input::placeholder {
+            color: #4b5563;
+            font-size: 13px;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
+        .btn-enter {
+            background-color: var(--sky);
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            padding: 0 18px;
+            min-height: 52px;
+            font-size: 14px;
+            font-weight: 900;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+        }
+        .btn-enter:hover { background-color: var(--sky-hover); }
+        .btn-enter:active { transform: scale(0.96); }
+
+        /* Feedback Banner */
+        .feedback-banner {
+            margin-top: 10px;
+            padding: 9px 12px;
+            border-radius: 10px;
+            background-color: #030712;
+            border: 1px solid var(--border-subtle);
+            font-size: 12px;
+            font-weight: 700;
+            color: #d1d5db;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 40px;
+            line-height: 1.35;
+        }
+        .feedback-banner.success {
+            background-color: rgba(6, 78, 59, 0.55);
+            border-color: var(--emerald);
+            color: #a7f3d0;
+        }
+        .feedback-banner.error {
+            background-color: rgba(136, 19, 55, 0.65);
+            border-color: var(--rose);
+            color: #fecdd3;
+        }
+
+        /* Workflow Action Buttons */
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn-action {
+            min-height: 52px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            color: #ffffff;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn-action:active:not(:disabled) { transform: scale(0.97); }
+        .btn-action:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .btn-next-loc {
+            background-color: var(--indigo);
+            border-color: #6366f1;
+        }
+        .btn-complete-pallet {
+            background-color: #d97706;
+            border-color: #f59e0b;
+        }
+
+        /* Inline Confirm Box */
+        .confirm-box {
+            display: none;
+            background-color: #030712;
+            border: 2px solid var(--amber);
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .confirm-box.show { display: block; }
+        .confirm-text {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fcd34d;
+            margin-bottom: 10px;
+        }
+        .confirm-btns {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .btn-cancel {
+            background-color: var(--bg-panel);
+            color: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-confirm {
+            background-color: #059669;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        /* Simulator Accordion */
+        .sim-box {
+            background-color: var(--bg-card);
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .sim-toggle {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 9px 12px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        .sim-body {
+            display: none;
+            padding: 10px 12px 12px;
+            border-top: 1px solid #1f2937;
+        }
+        .sim-body.open { display: block; }
+        .sim-note {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .sim-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .sim-chip {
+            border-radius: 7px;
+            padding: 6px 9px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            border: 1px solid;
+        }
+        .sim-chip.amber { background: var(--amber-bg); border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
+        .sim-chip.sky { background: var(--sky-bg); border-color: rgba(14, 165, 233, 0.45); color: #7dd3fc; }
+        .sim-chip.emerald { background: var(--emerald-bg); border-color: rgba(16, 185, 129, 0.45); color: #6ee7b7; }
+        .sim-chip.rose { background: var(--rose-bg); border-color: rgba(244, 63, 94, 0.45); color: #fda4af; }
+
+        /* Live Scan Log */
+        .log-card {
+            flex: 1;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 185px;
+        }
+        .log-header {
+            background-color: #030712;
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .log-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #d1d5db;
+        }
+        .log-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .btn-mini {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-mini.undo { color: #fbbf24; }
+        .btn-mini.clear { color: #fb7185; }
+        .btn-mini:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .log-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .log-empty {
+            padding: 28px 16px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .log-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid #1f2937;
+            font-size: 12px;
+        }
+        .log-wid {
+            font-weight: 800;
+            color: #34d399;
+            font-size: 13px;
+        }
+        .log-meta {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .log-seq {
+            text-align: right;
+            font-size: 11px;
+            font-weight: 700;
+            color: #7dd3fc;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col max-w-lg mx-auto border-x border-slate-800 shadow-2xl select-none">
+<body>
 
     <!-- Top Compact Status Header -->
-    <header class="bg-slate-950 border-b border-slate-800 px-3 py-2.5 flex items-center justify-between sticky top-0 z-20">
-        <div class="flex items-center gap-2">
-            <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" id="autoSaveDot"></div>
+    <header>
+        <div class="brand">
+            <div class="status-dot"></div>
             <div>
-                <h1 class="text-sm font-extrabold tracking-wide text-white uppercase leading-none">WMS Putaway HHD</h1>
-                <span class="text-[11px] text-emerald-400 font-medium" id="backupStatusText">Auto-Backup Active</span>
+                <div class="brand-title">WMS Putaway HHD</div>
+                <span class="brand-sub">Auto-Backup Active</span>
             </div>
         </div>
-        <div class="flex items-center gap-1.5">
-            <button onclick="toggleSound()" id="soundBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1" title="Toggle Beep Sound">
-                <span id="soundIcon">🔊</span>
-            </button>
-            <button onclick="exportCSV()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                <span>CSV (<span id="totalBackupCount">0</span>)</span>
+        <div class="header-actions">
+            <button type="button" class="btn-icon" id="soundBtn" onclick="toggleSound()" title="Toggle Audio">🔊</button>
+            <button type="button" class="btn-csv" onclick="exportCSV()">
+                <span>⬇ CSV (<span id="totalBackupCount">0</span>)</span>
             </button>
         </div>
     </header>
 
     <!-- Main Operation Container -->
-    <main id="mainContainer" class="flex-1 p-3 flex flex-col gap-3">
+    <main id="mainContainer">
 
-        <!-- Active Session Cards: Pallet Location & Putaway Location -->
-        <div class="grid grid-cols-2 gap-2.5">
-            <!-- Locked Pallet Location Card -->
-            <div id="palletCard" class="bg-slate-800/90 border-2 border-amber-500 rounded-xl p-2.5 transition-all">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">1. Pallet Loc</span>
-                    <span id="palletLockBadge" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">WAITING</span>
+        <!-- Step 1 & Step 2 Active Cards -->
+        <div class="cards-grid">
+            <div class="loc-card active-amber" id="palletCard">
+                <div class="card-top">
+                    <span class="card-label">1. Pallet Loc</span>
+                    <span class="badge amber" id="palletBadge">WAITING</span>
                 </div>
-                <div id="displayPalletLoc" class="mono text-lg font-extrabold text-amber-400 truncate">---</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">Starts with A-Z</div>
+                <div class="card-value mono amber" id="displayPalletLoc">---</div>
+                <div class="card-hint">Starts with A-Z</div>
             </div>
 
-            <!-- Active Putaway Location Card -->
-            <div id="putawayCard" class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-2.5 transition-all">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">2. Putaway Loc</span>
-                    <span id="putawayBinCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">0 Qty</span>
+            <div class="loc-card" id="putawayCard">
+                <div class="card-top">
+                    <span class="card-label">2. Putaway Loc</span>
+                    <span class="badge" id="putawayBadge">0 Qty</span>
                 </div>
-                <div id="displayPutawayLoc" class="mono text-lg font-extrabold text-slate-400 truncate">---</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">Starts with A-Z</div>
+                <div class="card-value mono" id="displayPutawayLoc">---</div>
+                <div class="card-hint">Starts with A-Z</div>
             </div>
         </div>
 
-        <!-- Pallet Quantity Progress Bar -->
-        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-slate-300">Pallet Qty:</span>
-                <span class="mono text-base font-extrabold text-sky-400" id="palletScannedCount">0</span>
-                <span class="text-xs text-slate-400">/</span>
-                <input type="number" id="targetQtyInput" value="2000" min="1" max="99999" onchange="updateTargetQty()" class="mono w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-bold text-center text-white focus:outline-none focus:border-sky-500" title="Target Pallet Qty">
+        <!-- Pallet Quantity Progress Bar (Default 2000) -->
+        <div class="progress-bar-box">
+            <div class="qty-group">
+                <span>Pallet Qty:</span>
+                <span class="qty-current mono" id="palletScannedCount">0</span>
+                <span style="color:#6b7280;">/</span>
+                <input type="number" id="targetQtyInput" class="qty-target-input mono" value="2000" min="1" max="99999" onchange="updateTargetQty()" title="Target Qty per Pallet">
             </div>
-            <div class="text-xs font-bold text-slate-400">
-                Bins Used: <span id="binsUsedCount" class="text-white mono">0</span>
+            <div class="bins-used">
+                Bins Used: <span class="mono" id="binsUsedCount">0</span>
             </div>
         </div>
 
-        <!-- Dynamic Scanner Input Box (Auto-Focused Always) -->
-        <div class="bg-slate-800 border-2 border-sky-500/80 rounded-2xl p-3 shadow-lg">
-            <div class="flex items-center justify-between mb-1.5">
-                <label for="scannerInput" id="stepInstruction" class="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-amber-400 flex items-center gap-1.5">
-                    <span>▶ STEP 1: SCAN PALLET LOCATION</span>
-                </label>
-                <span id="ruleHintBadge" class="text-[10px] font-bold bg-slate-900 text-sky-300 px-2 py-0.5 rounded-full border border-slate-700">STARTS WITH A-Z</span>
+        <!-- Primary Scanner Box -->
+        <div class="scanner-box" id="scannerBox">
+            <div class="step-header">
+                <div class="step-title" id="stepInstruction">▶ STEP 1: SCAN PALLET LOCATION</div>
+                <span class="rule-pill" id="ruleHintBadge">STARTS WITH A-Z</span>
             </div>
 
-            <form id="scannerForm" onsubmit="event.preventDefault(); processManualSubmit();" class="flex gap-2">
+            <div class="input-row">
                 <input 
                     type="text" 
                     id="scannerInput" 
+                    class="scan-input mono" 
                     autocomplete="off" 
                     autocorrect="off" 
                     autocapitalize="characters" 
-                    spellcheck="false"
-                    placeholder="Scan Pallet Loc (e.g. G4-L06-R02-C03)..."
-                    class="mono flex-1 bg-slate-950 border-2 border-slate-600 focus:border-sky-400 rounded-xl px-3 py-3 text-lg font-bold text-white placeholder-slate-500 focus:outline-none uppercase tracking-wider"
+                    spellcheck="false" 
+                    placeholder="Scan Pallet (e.g. G4-L06-R02-D04)..."
+                    onkeydown="handleInputKeyDown(event)"
+                    onkeyup="handleInputKeyUp(event)"
+                    oninput="handleScannerInput()"
                 >
-                <button 
-                    type="submit" 
-                    id="enterSubmitBtn"
-                    class="bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold px-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition min-h-[52px]"
-                >
-                    Enter
-                </button>
-            </form>
+                <button type="button" id="enterSubmitBtn" class="btn-enter" onclick="processScan()">ENTER</button>
+            </div>
 
-            <!-- Instant Validation Feedback Banner -->
-            <div id="feedbackBanner" class="mt-2.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-2 min-h-[38px]">
+            <div class="feedback-banner" id="feedbackBanner">
                 <span id="feedbackIcon">ℹ️</span>
-                <span id="feedbackText">Ready. Scan Pallet Location (must start with A-Z, e.g. G4-L06-R02-C03).</span>
+                <span id="feedbackText">Ready. Scan Pallet Location (must start with A-Z, e.g. G4-L06-R02-D04).</span>
             </div>
         </div>
 
-        <!-- Primary HHD Action Buttons (Large Touch Targets >= 50px) -->
-        <div class="grid grid-cols-2 gap-2.5">
-            <button 
-                type="button" 
-                id="addNextLocBtn" 
-                onclick="handleAddNextLocation()" 
-                disabled
-                class="min-h-[52px] rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wide px-3 py-2.5 flex items-center justify-center gap-1.5 transition shadow-md border bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white border-indigo-400 disabled:opacity-40 disabled:pointer-events-none"
-            >
-                <span class="text-base">➕</span>
-                <span>Add Next Location</span>
+        <!-- Multi-Location & Complete Pallet Controls -->
+        <div class="action-grid">
+            <button type="button" id="addNextLocBtn" class="btn-action btn-next-loc" onclick="handleAddNextLocation()" disabled>
+                <span>➕ Add Next Location</span>
             </button>
-
-            <button 
-                type="button" 
-                id="completePalletBtn" 
-                onclick="promptCompletePallet()" 
-                disabled
-                class="min-h-[52px] rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wide px-3 py-2.5 flex items-center justify-center gap-1.5 transition shadow-md border bg-amber-600 hover:bg-amber-500 active:scale-95 text-white border-amber-400 disabled:opacity-40 disabled:pointer-events-none"
-            >
-                <span class="text-base">✅</span>
-                <span>Complete Pallet</span>
+            <button type="button" id="completePalletBtn" class="btn-action btn-complete-pallet" onclick="promptCompletePallet()" disabled>
+                <span>✅ Complete Pallet</span>
             </button>
         </div>
 
-        <!-- Inline Confirmation Modal for Complete Pallet / Clear Data (No window.confirm used) -->
-        <div id="confirmBox" class="hidden bg-slate-900 border-2 border-amber-500 rounded-xl p-3 shadow-xl">
-            <p id="confirmMessage" class="text-xs font-bold text-amber-300 mb-2.5">Complete current pallet and scan a new pallet?</p>
-            <div class="flex gap-2 justify-end">
-                <button onclick="closeConfirmBox()" class="px-3.5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold text-white">Cancel</button>
-                <button id="confirmActionBtn" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">Yes, Confirm</button>
+        <!-- Inline Confirmation Modal -->
+        <div class="confirm-box" id="confirmBox">
+            <div class="confirm-text" id="confirmMessage">Complete current pallet and scan a new pallet?</div>
+            <div class="confirm-btns">
+                <button type="button" class="btn-cancel" onclick="closeConfirmBox()">Cancel</button>
+                <button type="button" class="btn-confirm" id="confirmActionBtn">Yes, Confirm</button>
             </div>
         </div>
 
-        <!-- Collapsible HHD Simulator / Demo Test Bar (For testing without physical scanner) -->
-        <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden">
-            <button onclick="toggleDemoBar()" class="w-full px-3 py-2 flex items-center justify-between text-[11px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-wider">
+        <!-- Collapsible Scanner Test Simulator -->
+        <div class="sim-box">
+            <button type="button" class="sim-toggle" onclick="toggleSimulator()">
                 <span>🧪 Scanner Test Simulator (Tap to test barcodes)</span>
-                <span id="demoChevron">▼</span>
+                <span id="simChevron">▼</span>
             </button>
-            <div id="demoBarContent" class="hidden px-3 pb-3 pt-1 border-t border-slate-800 space-y-2">
-                <div class="text-[10px] text-slate-400">Tap any sample barcode to simulate hardware HHD scan + Enter:</div>
-                <div class="flex flex-wrap gap-1.5">
-                    <button onclick="simulateScan('G4-L06-R02-C03')" class="px-2.5 py-1.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 mono text-xs font-bold">G4-L06-R02-C03 (Pallet)</button>
-                    <button onclick="simulateScan('R2-B05-S01')" class="px-2.5 py-1.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 mono text-xs font-bold">R2-B05-S01 (Putaway)</button>
-                    <button onclick="simulateScan('R2-B05-S02')" class="px-2.5 py-1.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 mono text-xs font-bold">R2-B05-S02 (Putaway 2)</button>
-                    <button onclick="simulateScan('45-INVALID')" class="px-2.5 py-1.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 mono text-xs font-bold">45-INVALID (No A-Z)</button>
-                    <button onclick="simulateRandomWID()" class="px-2.5 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 mono text-xs font-bold">X-WID (Valid)</button>
-                    <button onclick="simulateScan('B100295')" class="px-2.5 py-1.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 mono text-xs font-bold">B100295 (No X)</button>
+            <div class="sim-body" id="simBody">
+                <div class="sim-note">Tap any sample barcode below to simulate hardware scanner input + Enter:</div>
+                <div class="sim-chips">
+                    <button type="button" class="sim-chip amber mono" onclick="simulateScan('G4-L06-R02-D04')">G4-L06-R02-D04 (Valid Pallet)</button>
+                    <button type="button" class="sim-chip rose mono" onclick="simulateScan('45-INVALID')">45-INVALID (Invalid Loc)</button>
+                    <button type="button" class="sim-chip sky mono" onclick="simulateScan('R2-B05-S01')">R2-B05-S01 (Valid Putaway)</button>
+                    <button type="button" class="sim-chip sky mono" onclick="simulateScan('R2-B05-S02')">R2-B05-S02 (Next Putaway)</button>
+                    <button type="button" class="sim-chip emerald mono" onclick="simulateScan('X9842101')">X9842101 (Valid WID)</button>
+                    <button type="button" class="sim-chip emerald mono" onclick="simulateRandomWID()">X-RANDOM (Next WID)</button>
+                    <button type="button" class="sim-chip rose mono" onclick="simulateScan('A9842101')">A9842101 (Invalid WID)</button>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Scans & Location Breakdown Section -->
-        <div class="flex-1 bg-slate-800/70 border border-slate-700/80 rounded-xl flex flex-col overflow-hidden min-h-[190px]">
-            <div class="px-3 py-2 bg-slate-900/90 border-b border-slate-700 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-300">Live Scan Log</span>
-                    <span id="locationSummaryChips" class="flex gap-1 overflow-x-auto max-w-[160px]"></span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="undoLastScan()" id="undoBtn" disabled class="text-[11px] font-bold text-amber-400 hover:text-amber-300 disabled:opacity-30 px-2 py-1 rounded bg-slate-800 border border-slate-700">
-                        ↩ Undo Last
-                    </button>
-                    <button onclick="promptClearBackup()" class="text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded bg-slate-800 border border-slate-700">
-                        Clear All
-                    </button>
+        <!-- Live Scan Log -->
+        <div class="log-card">
+            <div class="log-header">
+                <span class="log-title">Live Scan Log</span>
+                <div class="log-actions">
+                    <button type="button" class="btn-mini undo" id="undoBtn" onclick="undoLastScan()" disabled>↩ Undo Last</button>
+                    <button type="button" class="btn-mini clear" onclick="promptClearAll()">Clear All</button>
                 </div>
             </div>
-
-            <!-- Scrollable Table for Recent Scanned WIDs -->
-            <div class="flex-1 overflow-y-auto divide-y divide-slate-700/60" id="scanLogList">
-                <div class="p-6 text-center text-xs text-slate-500">
-                    No WIDs scanned yet. Follow steps above to start mapping.
-                </div>
+            <div class="log-list" id="scanLogList">
+                <div class="log-empty">No WIDs scanned yet. Follow Steps 1 → 2 → 3 above to start mapping.</div>
             </div>
         </div>
 
@@ -228,114 +740,653 @@
     <script>
         /**
          * HHD WAREHOUSE PUTAWAY & PALLET MAPPING ENGINE
-         * Pure Vanilla JS for zero latency on Zebra / Honeywell Handheld Terminals
+         * Zero-dependency, fault-tolerant Vanilla JS for Zebra / Honeywell HHD Terminals
          */
 
-        // --- STORAGE KEYS ---
-        const STORAGE_BACKUP_KEY = 'hhd_wms_putaway_backup_v1';
-        const STORAGE_SESSION_KEY = 'hhd_wms_active_session_v1';
+        const STORAGE_BACKUP_KEY = 'hhd_wms_putaway_backup_v2';
+        const STORAGE_SESSION_KEY = 'hhd_wms_active_session_v2';
 
-        // --- APPLICATION STATE ---
+        // Strict Validation Rules
+        const LOCATION_REGEX = /^[A-Za-z][A-Za-z0-9\-_]*$/;
+        const WID_REGEX = /^X[A-Za-z0-9\-_]+$/i;
+
+        // Application State
         let state = {
             step: 'PALLET', // 'PALLET' | 'PUTAWAY' | 'WID'
             activePalletLoc: '',
             activePutawayLoc: '',
             targetQty: 2000,
             soundEnabled: true,
-            // Current pallet's scanned WIDs (Set serialized as Array for duplicate check)
             currentPalletWIDs: [],
-            // All historical backup records saved permanently until cleared
             backupRecords: []
         };
 
-        // --- STRICT REGEX VALIDATORS (Per Requirements #2 & #7) ---
-        // Requirement #7: Both Pallet & Putaway Locations must START with Alphabetical character (A-Z), followed by A-Z, 0-9, -, _
-        const LOCATION_REGEX = /^[A-Za-z][A-Za-z0-9\-_]*$/;
-        // Requirement #2: WID must ALWAYS start with 'X' or 'x' followed by valid alphanumeric/dash/underscore chars
-        const WID_REGEX = /^[Xx][A-Za-z0-9\-_]+$/;
-
-        // --- BARCODE SCANNER BURST / AUTO-SUBMIT STATE ---
-        let scanBurstTimer = null;
-        let lastInputTime = 0;
-        let rapidCharCount = 0;
+        // Scanner Burst Auto-Submit Timer
+        let burstTimer = null;
+        let lastKeystrokeTime = 0;
+        let rapidCount = 0;
+        let audioCtx = null;
 
         // --- INITIALIZATION ---
-        window.addEventListener('DOMContentLoaded', () => {
-            loadFromStorage();
-            bindScannerEvents();
+        window.onload = function () {
+            loadState();
             renderUI();
-            refocusInput();
-        });
+            focusScanner();
+        };
 
-        function bindScannerEvents() {
-            const scannerInput = document.getElementById('scannerInput');
-            const enterBtn = document.getElementById('enterSubmitBtn');
+        function focusScanner() {
+            try {
+                const input = document.getElementById('scannerInput');
+                if (input && document.activeElement !== input) {
+                    input.focus();
+                }
+            } catch (e) {}
+        }
 
-            if (scannerInput) {
-                // Handle hardware Enter / Tab / NumpadEnter keys reliably
-                scannerInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.keyCode === 13) {
-                        e.preventDefault();
-                        clearTimeout(scanBurstTimer);
-                        processManualSubmit();
-                    }
-                });
-
-                scannerInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter' || e.keyCode === 13) {
-                        e.preventDefault();
-                        clearTimeout(scanBurstTimer);
-                        processManualSubmit();
-                    }
-                });
-
-                // Smart Auto-Submit for HHD barcode scanners without Enter suffix
-                scannerInput.addEventListener('input', () => {
-                    const now = Date.now();
-                    const timeDiff = now - lastInputTime;
-                    lastInputTime = now;
-
-                    // Hardware barcode scanners inject characters within < 45ms per keystroke
-                    if (timeDiff < 55) {
-                        rapidCharCount++;
-                    } else {
-                        rapidCharCount = 1;
-                    }
-
-                    clearTimeout(scanBurstTimer);
-                    const val = scannerInput.value.trim();
-                    if (val.length >= 4 && rapidCharCount >= 3) {
-                        scanBurstTimer = setTimeout(() => {
-                            if (scannerInput.value.trim().length >= 4) {
-                                rapidCharCount = 0;
-                                processManualSubmit();
-                            }
-                        }, 120);
-                    }
-                });
-            }
-
-            if (enterBtn) {
-                // Explicit touch & click binding so HHD touchscreens respond instantaneously
-                enterBtn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    clearTimeout(scanBurstTimer);
-                    processManualSubmit();
-                });
-                enterBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    clearTimeout(scanBurstTimer);
-                    processManualSubmit();
-                });
+        // --- ROCK-SOLID INPUT & SCANNER HANDLERS ---
+        function handleInputKeyDown(e) {
+            if (!e) return;
+            const key = e.key || '';
+            const code = e.keyCode || e.which || 0;
+            if (key === 'Enter' || key === 'Tab' || code === 13 || code === 9) {
+                e.preventDefault();
+                clearTimeout(burstTimer);
+                processScan();
             }
         }
 
-        function processManualSubmit() {
-            const scannerInput = document.getElementById('scannerInput');
-            if (!scannerInput) return;
-            const rawVal = scannerInput.value;
-            scannerInput.value = '';
-            rapidCharCount = 0;
-            handleScan(rawVal);
+        function handleInputKeyUp(e) {
+            if (!e) return;
+            const key = e.key || '';
+            const code = e.keyCode || e.which || 0;
+            if (key === 'Enter' || code === 13) {
+                e.preventDefault();
+                clearTimeout(burstTimer);
+                processScan();
+            }
         }
-// ... existing code ... -->
+
+        function handleScannerInput() {
+            const input = document.getElementById('scannerInput');
+            if (!input) return;
+
+            const now = Date.now();
+            const delta = now - lastKeystrokeTime;
+            lastKeystrokeTime = now;
+
+            // Hardware barcode wedges inject keystrokes rapidly (< 65ms apart)
+            if (delta < 65) {
+                rapidCount++;
+            } else {
+                rapidCount = 1;
+            }
+
+            clearTimeout(burstTimer);
+            const val = input.value.trim();
+
+            // Auto-submit after 180ms idle if >= 4 chars entered via rapid scanner burst
+            if (val.length >= 4 && rapidCount >= 3) {
+                burstTimer = setTimeout(function () {
+                    const currentVal = input.value.trim();
+                    if (currentVal.length >= 4) {
+                        rapidCount = 0;
+                        processScan();
+                    }
+                }, 180);
+            }
+        }
+
+        function simulateScan(barcodeText) {
+            const input = document.getElementById('scannerInput');
+            if (!input) return;
+            clearTimeout(burstTimer);
+            input.value = barcodeText;
+            processScan();
+        }
+
+        function simulateRandomWID() {
+            const randNum = Math.floor(1000000 + Math.random() * 8999999);
+            simulateScan('X' + randNum);
+        }
+
+        // --- CORE SUBMISSION ENGINE ---
+        function processScan() {
+            clearTimeout(burstTimer);
+            rapidCount = 0;
+
+            const input = document.getElementById('scannerInput');
+            if (!input) return;
+
+            const raw = (input.value || '').trim().toUpperCase();
+            input.value = '';
+
+            if (!raw) {
+                setFeedback('error', '⚠️', 'Empty scan! Please scan a valid barcode.');
+                playFeedbackTone('error');
+                focusScanner();
+                return;
+            }
+
+            if (state.step === 'PALLET') {
+                handlePalletStep(raw);
+            } else if (state.step === 'PUTAWAY') {
+                handlePutawayStep(raw);
+            } else if (state.step === 'WID') {
+                handleWIDStep(raw);
+            }
+
+            saveState();
+            renderUI();
+            focusScanner();
+        }
+
+        // STEP 1: Validate & Lock Pallet Location
+        function handlePalletStep(code) {
+            if (!LOCATION_REGEX.test(code)) {
+                triggerFlash('error');
+                playFeedbackTone('error');
+                setFeedback('error', '🚫', 'REJECTED "' + code + '": Pallet Location must START with A-Z (e.g. G4-L06-R02-D04).');
+                return;
+            }
+
+            state.activePalletLoc = code;
+            state.currentPalletWIDs = [];
+            state.step = 'PUTAWAY';
+
+            triggerFlash('success');
+            playFeedbackTone('success');
+            setFeedback('success', '✅', 'Pallet "' + code + '" locked! Now scan Putaway Location (starts with A-Z).');
+        }
+
+        // STEP 2: Validate & Lock Putaway Location
+        function handlePutawayStep(code) {
+            if (!LOCATION_REGEX.test(code)) {
+                triggerFlash('error');
+                playFeedbackTone('error');
+                setFeedback('error', '🚫', 'REJECTED "' + code + '": Putaway Location must START with A-Z (e.g. R2-B05-S01).');
+                return;
+            }
+
+            state.activePutawayLoc = code;
+            state.step = 'WID';
+
+            triggerFlash('success');
+            playFeedbackTone('success');
+            setFeedback('success', '✅', 'Putaway "' + code + '" active! Continuously scan WID items starting with X.');
+        }
+
+        // STEP 3: Continuous WID Scanning Loop
+        function handleWIDStep(code) {
+            if (!WID_REGEX.test(code)) {
+                triggerFlash('error');
+                playFeedbackTone('error');
+                setFeedback('error', '🚫', 'REJECTED "' + code + '": WID must strictly start with "X" (e.g. X9842101).');
+                return;
+            }
+
+            // Block duplicate WID within the currently active pallet
+            if (state.currentPalletWIDs.indexOf(code) !== -1) {
+                triggerFlash('error');
+                playFeedbackTone('error');
+                setFeedback('error', '⚠️', 'DUPLICATE BLOCKED: "' + code + '" is already scanned on Pallet ' + state.activePalletLoc + '!');
+                return;
+            }
+
+            // Record valid WID
+            state.currentPalletWIDs.push(code);
+
+            const palletSeq = state.currentPalletWIDs.length;
+            const binSeq = state.backupRecords.filter(function (r) {
+                return r.palletLoc === state.activePalletLoc && r.putawayLoc === state.activePutawayLoc;
+            }).length + 1;
+
+            const record = {
+                id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                timestamp: new Date().toISOString(),
+                palletLoc: state.activePalletLoc,
+                putawayLoc: state.activePutawayLoc,
+                wid: code,
+                binSeq: binSeq,
+                palletSeq: palletSeq
+            };
+
+            state.backupRecords.unshift(record);
+
+            triggerFlash('success');
+            playFeedbackTone('success');
+
+            if (palletSeq >= state.targetQty) {
+                setFeedback('success', '🎯', 'TARGET REACHED (' + palletSeq + '/' + state.targetQty + ')! Tap "Complete Pallet" or keep scanning.');
+            } else {
+                setFeedback('success', '✔️', 'SAVED ' + code + ' → Bin #' + binSeq + ' | Pallet #' + palletSeq + ' (' + state.activePutawayLoc + ')');
+            }
+        }
+
+        // --- MULTI-LOCATION & PALLET WORKFLOW CONTROLS ---
+        function handleAddNextLocation() {
+            if (!state.activePalletLoc) return;
+            state.activePutawayLoc = '';
+            state.step = 'PUTAWAY';
+            saveState();
+            renderUI();
+            setFeedback('success', '📍', 'Pallet "' + state.activePalletLoc + '" kept locked. Scan NEXT Putaway Location.');
+            playFeedbackTone('success');
+            focusScanner();
+        }
+
+        function promptCompletePallet() {
+            if (!state.activePalletLoc) return;
+            const box = document.getElementById('confirmBox');
+            const msg = document.getElementById('confirmMessage');
+            const btn = document.getElementById('confirmActionBtn');
+
+            msg.textContent = 'Complete Pallet "' + state.activePalletLoc + '" (' + state.currentPalletWIDs.length + ' WIDs) and start a new pallet?';
+            btn.onclick = function () {
+                completeCurrentPallet();
+                closeConfirmBox();
+            };
+            box.classList.add('show');
+        }
+
+        function completeCurrentPallet() {
+            const finishedLoc = state.activePalletLoc;
+            const finishedCount = state.currentPalletWIDs.length;
+
+            state.activePalletLoc = '';
+            state.activePutawayLoc = '';
+            state.currentPalletWIDs = [];
+            state.step = 'PALLET';
+
+            saveState();
+            renderUI();
+            setFeedback('success', '🏁', 'Pallet "' + finishedLoc + '" completed (' + finishedCount + ' items). Scan NEW Pallet Location.');
+            playFeedbackTone('success');
+            focusScanner();
+        }
+
+        function undoLastScan() {
+            if (state.backupRecords.length === 0) return;
+            const removed = state.backupRecords.shift();
+
+            // Also remove from active pallet duplicate tracker if matching
+            if (removed && removed.palletLoc === state.activePalletLoc) {
+                const idx = state.currentPalletWIDs.indexOf(removed.wid);
+                if (idx !== -1) {
+                    state.currentPalletWIDs.splice(idx, 1);
+                }
+            }
+
+            saveState();
+            renderUI();
+            setFeedback('error', '↩️', 'Undid last scan: ' + removed.wid + ' (' + removed.putawayLoc + ')');
+            focusScanner();
+        }
+
+        function promptClearAll() {
+            const box = document.getElementById('confirmBox');
+            const msg = document.getElementById('confirmMessage');
+            const btn = document.getElementById('confirmActionBtn');
+
+            msg.textContent = 'Delete ALL saved scan logs and reset current pallet session? (Export CSV first if needed)';
+            btn.onclick = function () {
+                clearAllData();
+                closeConfirmBox();
+            };
+            box.classList.add('show');
+        }
+
+        function clearAllData() {
+            state.step = 'PALLET';
+            state.activePalletLoc = '';
+            state.activePutawayLoc = '';
+            state.currentPalletWIDs = [];
+            state.backupRecords = [];
+
+            try {
+                localStorage.removeItem(STORAGE_BACKUP_KEY);
+                localStorage.removeItem(STORAGE_SESSION_KEY);
+            } catch (e) {}
+
+            renderUI();
+            setFeedback('success', '🧹', 'All logs cleared. Ready to scan Step 1: Pallet Location.');
+            focusScanner();
+        }
+
+        function closeConfirmBox() {
+            const box = document.getElementById('confirmBox');
+            if (box) box.classList.remove('show');
+            focusScanner();
+        }
+
+        function updateTargetQty() {
+            const input = document.getElementById('targetQtyInput');
+            if (!input) return;
+            const val = parseInt(input.value, 10);
+            if (!isNaN(val) && val > 0) {
+                state.targetQty = val;
+                saveState();
+                renderUI();
+            }
+        }
+
+        // --- UI RENDERING ---
+        function renderUI() {
+            const palletCard = document.getElementById('palletCard');
+            const palletBadge = document.getElementById('palletBadge');
+            const displayPallet = document.getElementById('displayPalletLoc');
+
+            const putawayCard = document.getElementById('putawayCard');
+            const putawayBadge = document.getElementById('putawayBadge');
+            const displayPutaway = document.getElementById('displayPutawayLoc');
+
+            const stepInstruction = document.getElementById('stepInstruction');
+            const ruleHintBadge = document.getElementById('ruleHintBadge');
+            const scannerInput = document.getElementById('scannerInput');
+
+            // Calculate active bin count & bins used for current pallet
+            const currentBinQty = state.backupRecords.filter(function (r) {
+                return r.palletLoc === state.activePalletLoc && r.putawayLoc === state.activePutawayLoc;
+            }).length;
+
+            const uniqueBins = {};
+            state.backupRecords.forEach(function (r) {
+                if (r.palletLoc === state.activePalletLoc && r.putawayLoc) {
+                    uniqueBins[r.putawayLoc] = true;
+                }
+            });
+            if (state.activePutawayLoc) {
+                uniqueBins[state.activePutawayLoc] = true;
+            }
+            const binsUsed = Object.keys(uniqueBins).length;
+
+            // Update Counters
+            document.getElementById('palletScannedCount').textContent = state.currentPalletWIDs.length;
+            document.getElementById('targetQtyInput').value = state.targetQty;
+            document.getElementById('binsUsedCount').textContent = binsUsed;
+            document.getElementById('totalBackupCount').textContent = state.backupRecords.length;
+
+            // Update Pallet Card
+            if (state.activePalletLoc) {
+                palletCard.className = 'loc-card locked-emerald';
+                palletBadge.className = 'badge emerald';
+                palletBadge.textContent = 'LOCKED';
+                displayPallet.className = 'card-value mono emerald';
+                displayPallet.textContent = state.activePalletLoc;
+            } else {
+                palletCard.className = 'loc-card active-amber';
+                palletBadge.className = 'badge amber';
+                palletBadge.textContent = 'WAITING';
+                displayPallet.className = 'card-value mono amber';
+                displayPallet.textContent = '---';
+            }
+
+            // Update Putaway Card
+            if (state.activePutawayLoc) {
+                putawayCard.className = 'loc-card active-sky';
+                putawayBadge.className = 'badge sky';
+                putawayBadge.textContent = currentBinQty + ' Qty';
+                displayPutaway.className = 'card-value mono sky';
+                displayPutaway.textContent = state.activePutawayLoc;
+            } else if (state.step === 'PUTAWAY') {
+                putawayCard.className = 'loc-card active-amber';
+                putawayBadge.className = 'badge amber';
+                putawayBadge.textContent = 'SCAN NOW';
+                displayPutaway.className = 'card-value mono amber';
+                displayPutaway.textContent = '---';
+            } else {
+                putawayCard.className = 'loc-card';
+                putawayBadge.className = 'badge';
+                putawayBadge.textContent = '0 Qty';
+                displayPutaway.className = 'card-value mono';
+                displayPutaway.textContent = '---';
+            }
+
+            // Update Step Prompt & Input Placeholder
+            if (state.step === 'PALLET') {
+                stepInstruction.className = 'step-title';
+                stepInstruction.textContent = '▶ STEP 1: SCAN PALLET LOCATION';
+                ruleHintBadge.textContent = 'STARTS WITH A-Z';
+                scannerInput.placeholder = 'Scan Pallet (e.g. G4-L06-R02-D04)...';
+            } else if (state.step === 'PUTAWAY') {
+                stepInstruction.className = 'step-title sky';
+                stepInstruction.textContent = '▶ STEP 2: SCAN PUTAWAY LOCATION';
+                ruleHintBadge.textContent = 'STARTS WITH A-Z';
+                scannerInput.placeholder = 'Scan Putaway (e.g. R2-B05-S01)...';
+            } else {
+                stepInstruction.className = 'step-title emerald';
+                stepInstruction.textContent = '▶ STEP 3: SCAN WID ITEMS (LOOP)';
+                ruleHintBadge.textContent = 'MUST START WITH X';
+                scannerInput.placeholder = 'Scan WID (e.g. X9842101)...';
+            }
+
+            // Enable/Disable Action Buttons
+            document.getElementById('addNextLocBtn').disabled = (state.step !== 'WID');
+            document.getElementById('completePalletBtn').disabled = (!state.activePalletLoc);
+            document.getElementById('undoBtn').disabled = (state.backupRecords.length === 0);
+
+            // Render Live Scan Log
+            renderScanLog();
+        }
+
+        function renderScanLog() {
+            const listEl = document.getElementById('scanLogList');
+            if (!listEl) return;
+
+            if (state.backupRecords.length === 0) {
+                listEl.innerHTML = '<div class="log-empty">No WIDs scanned yet. Follow Steps 1 → 2 → 3 above to start mapping.</div>';
+                return;
+            }
+
+            // Show latest 50 records in UI for ultra-fast HHD performance (all records remain in backup/CSV)
+            const visibleRecords = state.backupRecords.slice(0, 50);
+            let html = '';
+
+            for (let i = 0; i < visibleRecords.length; i++) {
+                const item = visibleRecords[i];
+                const timeStr = formatShortTime(item.timestamp);
+                html += '<div class="log-row">' +
+                    '<div>' +
+                        '<div class="log-wid mono">' + escapeHTML(item.wid) + '</div>' +
+                        '<div class="log-meta mono">Pallet: ' + escapeHTML(item.palletLoc) + ' → Bin: ' + escapeHTML(item.putawayLoc) + '</div>' +
+                    '</div>' +
+                    '<div class="log-seq mono">' +
+                        '<div>Bin #' + item.binSeq + ' | Plt #' + item.palletSeq + '</div>' +
+                        '<div class="log-meta">' + timeStr + '</div>' +
+                    '</div>' +
+                '</div>';
+            }
+
+            listEl.innerHTML = html;
+        }
+
+        function setFeedback(type, icon, text) {
+            const banner = document.getElementById('feedbackBanner');
+            const iconEl = document.getElementById('feedbackIcon');
+            const textEl = document.getElementById('feedbackText');
+            if (!banner || !iconEl || !textEl) return;
+
+            banner.className = 'feedback-banner ' + (type || '');
+            iconEl.textContent = icon;
+            textEl.textContent = text;
+        }
+
+        function triggerFlash(type) {
+            const box = document.getElementById('scannerBox');
+            if (!box) return;
+            box.classList.remove('flash-success', 'flash-error');
+            void box.offsetWidth; // Force reflow
+            box.classList.add(type === 'success' ? 'flash-success' : 'flash-error');
+        }
+
+        // --- SAFE WEB AUDIO API FEEDBACK (NEVER BLOCKS EXECUTION) ---
+        function toggleSound() {
+            state.soundEnabled = !state.soundEnabled;
+            const btn = document.getElementById('soundBtn');
+            if (btn) btn.textContent = state.soundEnabled ? '🔊' : '🔇';
+            saveState();
+            focusScanner();
+        }
+
+        function playFeedbackTone(type) {
+            if (!state.soundEnabled) return;
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+
+                if (!audioCtx) {
+                    audioCtx = new AudioContextClass();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+                if (type === 'success') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, now);
+                    osc.frequency.exponentialRampToValueAtTime(1180, now + 0.08);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                    osc.start(now);
+                    osc.stop(now + 0.11);
+                } else {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(190, now);
+                    osc.frequency.linearRampToValueAtTime(130, now + 0.22);
+                    gain.gain.setValueAtTime(0.24, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch (err) {
+                // Silently ignore audio blocks on restricted HHD browsers
+            }
+        }
+
+        // --- LOCALSTORAGE PERSISTENCE ---
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_BACKUP_KEY, JSON.stringify(state.backupRecords));
+                localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify({
+                    step: state.step,
+                    activePalletLoc: state.activePalletLoc,
+                    activePutawayLoc: state.activePutawayLoc,
+                    targetQty: state.targetQty,
+                    soundEnabled: state.soundEnabled,
+                    currentPalletWIDs: state.currentPalletWIDs
+                }));
+            } catch (e) {}
+        }
+
+        function loadState() {
+            try {
+                const savedBackup = localStorage.getItem(STORAGE_BACKUP_KEY);
+                if (savedBackup) {
+                    const parsed = JSON.parse(savedBackup);
+                    if (Array.isArray(parsed)) state.backupRecords = parsed;
+                }
+
+                const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
+                if (savedSession) {
+                    const sess = JSON.parse(savedSession);
+                    if (sess && typeof sess === 'object') {
+                        state.step = sess.step || 'PALLET';
+                        state.activePalletLoc = sess.activePalletLoc || '';
+                        state.activePutawayLoc = sess.activePutawayLoc || '';
+                        state.targetQty = sess.targetQty || 2000;
+                        state.soundEnabled = (typeof sess.soundEnabled === 'boolean') ? sess.soundEnabled : true;
+                        state.currentPalletWIDs = Array.isArray(sess.currentPalletWIDs) ? sess.currentPalletWIDs : [];
+                    }
+                }
+
+                const soundBtn = document.getElementById('soundBtn');
+                if (soundBtn) soundBtn.textContent = state.soundEnabled ? '🔊' : '🔇';
+            } catch (e) {}
+        }
+
+        // --- CSV EXPORT ---
+        function exportCSV() {
+            if (state.backupRecords.length === 0) {
+                setFeedback('error', '⚠️', 'No scan records available to export yet.');
+                playFeedbackTone('error');
+                focusScanner();
+                return;
+            }
+
+            const headers = ['Timestamp', 'Pallet_Location', 'Putaway_Location', 'WID', 'Bin_Seq', 'Pallet_Seq'];
+            // Export in chronological order (oldest first)
+            const chronological = state.backupRecords.slice().reverse();
+            const rows = [headers.join(',')];
+
+            for (let i = 0; i < chronological.length; i++) {
+                const r = chronological[i];
+                rows.push([
+                    csvSafe(r.timestamp),
+                    csvSafe(r.palletLoc),
+                    csvSafe(r.putawayLoc),
+                    csvSafe(r.wid),
+                    r.binSeq,
+                    r.palletSeq
+                ].join(','));
+            }
+
+            const csvContent = rows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const dateTag = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'HHD_Putaway_Mapping_' + dateTag + '.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            setFeedback('success', '📥', 'Exported ' + chronological.length + ' records to CSV successfully!');
+            playFeedbackTone('success');
+            focusScanner();
+        }
+
+        function csvSafe(val) {
+            const str = String(val == null ? '' : val);
+            if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        // --- UI HELPERS ---
+        function toggleSimulator() {
+            const body = document.getElementById('simBody');
+            const chevron = document.getElementById('simChevron');
+            if (!body || !chevron) return;
+            const isOpen = body.classList.toggle('open');
+            chevron.textContent = isOpen ? '▲' : '▼';
+            focusScanner();
+        }
+
+        function formatShortTime(isoStr) {
+            try {
+                const d = new Date(isoStr);
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
