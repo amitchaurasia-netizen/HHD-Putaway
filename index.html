@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HHD Putaway & Pallet Mapper</title>
+    <!-- Lightweight Tailwind CSS for ultra-fast HHD rendering -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom Industrial HHD Optimizations */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* High-contrast Slate 900 */
+            color: #f8fafc;
+            overscroll-behavior-y: contain;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Instant visual flash animations for scan feedback */
+        @keyframes flashSuccess {
+            0% { background-color: rgba(16, 185, 129, 0.35); }
+            100% { background-color: transparent; }
+        }
+        @keyframes flashError {
+            0% { background-color: rgba(239, 68, 68, 0.45); }
+            100% { background-color: transparent; }
+        }
+        .scan-success-flash {
+            animation: flashSuccess 0.35s ease-out;
+        }
+        .scan-error-flash {
+            animation: flashError 0.45s ease-out;
+        }
+        /* Custom scrollbar for compact HHD logs */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col max-w-lg mx-auto border-x border-slate-800 shadow-2xl select-none">
+
+    <!-- Top Compact Status Header -->
+    <header class="bg-slate-950 border-b border-slate-800 px-3 py-2.5 flex items-center justify-between sticky top-0 z-20">
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" id="autoSaveDot"></div>
+            <div>
+                <h1 class="text-sm font-extrabold tracking-wide text-white uppercase leading-none">WMS Putaway HHD</h1>
+                <span class="text-[11px] text-emerald-400 font-medium" id="backupStatusText">Auto-Backup Active</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <button onclick="toggleSound()" id="soundBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1" title="Toggle Beep Sound">
+                <span id="soundIcon">🔊</span>
+            </button>
+            <button onclick="exportCSV()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>CSV (<span id="totalBackupCount">0</span>)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Operation Container -->
+    <main id="mainContainer" class="flex-1 p-3 flex flex-col gap-3">
+
+        <!-- Active Session Cards: Pallet Location & Putaway Location -->
+        <div class="grid grid-cols-2 gap-2.5">
+            <!-- Locked Pallet Location Card -->
+            <div id="palletCard" class="bg-slate-800/90 border-2 border-amber-500 rounded-xl p-2.5 transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">1. Pallet Loc</span>
+                    <span id="palletLockBadge" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">WAITING</span>
+                </div>
+                <div id="displayPalletLoc" class="mono text-lg font-extrabold text-amber-400 truncate">---</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Only A-Z Allowed</div>
+            </div>
+
+            <!-- Active Putaway Location Card -->
+            <div id="putawayCard" class="bg-slate-800/90 border-2 border-slate-700 rounded-xl p-2.5 transition-all">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">2. Putaway Loc</span>
+                    <span id="putawayBinCount" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">0 Qty</span>
+                </div>
+                <div id="displayPutawayLoc" class="mono text-lg font-extrabold text-slate-400 truncate">---</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Only A-Z Allowed</div>
+            </div>
+        </div>
+
+        <!-- Pallet Quantity Progress Bar -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl px-3 py-2 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-300">Pallet Qty:</span>
+                <span class="mono text-base font-extrabold text-sky-400" id="palletScannedCount">0</span>
+                <span class="text-xs text-slate-400">/</span>
+                <input type="number" id="targetQtyInput" value="200" min="1" max="9999" onchange="updateTargetQty()" class="mono w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs font-bold text-center text-white focus:outline-none focus:border-sky-500" title="Target Pallet Qty">
+            </div>
+            <div class="text-xs font-bold text-slate-400">
+                Bins Used: <span id="binsUsedCount" class="text-white mono">0</span>
+            </div>
+        </div>
+
+        <!-- Dynamic Scanner Input Box (Auto-Focused Always) -->
+        <div class="bg-slate-800 border-2 border-sky-500/80 rounded-2xl p-3 shadow-lg">
+            <div class="flex items-center justify-between mb-1.5">
+                <label for="scannerInput" id="stepInstruction" class="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-amber-400 flex items-center gap-1.5">
+                    <span>▶ STEP 1: SCAN PALLET LOCATION</span>
+                </label>
+                <span id="ruleHintBadge" class="text-[10px] font-bold bg-slate-900 text-sky-300 px-2 py-0.5 rounded-full border border-slate-700">A-Z ONLY</span>
+            </div>
+
+            <div class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="scannerInput" 
+                    autocomplete="off" 
+                    autocorrect="off" 
+                    autocapitalize="characters" 
+                    spellcheck="false"
+                    placeholder="Scan Pallet Loc (A-Z)..."
+                    class="mono flex-1 bg-slate-950 border-2 border-slate-600 focus:border-sky-400 rounded-xl px-3 py-3 text-lg font-bold text-white placeholder-slate-500 focus:outline-none uppercase tracking-wider"
+                >
+                <button 
+                    type="button" 
+                    onclick="processManualSubmit()" 
+                    class="bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-extrabold px-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition min-h-[52px]"
+                >
+                    Enter
+                </button>
+            </div>
+
+            <!-- Instant Validation Feedback Banner -->
+            <div id="feedbackBanner" class="mt-2.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-2 min-h-[38px]">
+                <span id="feedbackIcon">ℹ️</span>
+                <span id="feedbackText">Ready. Scan Pallet Location (Alphabetical only).</span>
+            </div>
+        </div>
+
+        <!-- Primary HHD Action Buttons (Large Touch Targets >= 50px) -->
+        <div class="grid grid-cols-2 gap-2.5">
+            <button 
+                type="button" 
+                id="addNextLocBtn" 
+                onclick="handleAddNextLocation()" 
+                disabled
+                class="min-h-[52px] rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wide px-3 py-2.5 flex items-center justify-center gap-1.5 transition shadow-md border bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white border-indigo-400 disabled:opacity-40 disabled:pointer-events-none"
+            >
+                <span class="text-base">➕</span>
+                <span>Add Next Location</span>
+            </button>
+
+            <button 
+                type="button" 
+                id="completePalletBtn" 
+                onclick="promptCompletePallet()" 
+                disabled
+                class="min-h-[52px] rounded-xl font-extrabold text-xs sm:text-sm uppercase tracking-wide px-3 py-2.5 flex items-center justify-center gap-1.5 transition shadow-md border bg-amber-600 hover:bg-amber-500 active:scale-95 text-white border-amber-400 disabled:opacity-40 disabled:pointer-events-none"
+            >
+                <span class="text-base">✅</span>
+                <span>Complete Pallet</span>
+            </button>
+        </div>
+
+        <!-- Inline Confirmation Modal for Complete Pallet / Clear Data (No window.confirm used) -->
+        <div id="confirmBox" class="hidden bg-slate-900 border-2 border-amber-500 rounded-xl p-3 shadow-xl">
+            <p id="confirmMessage" class="text-xs font-bold text-amber-300 mb-2.5">Complete current pallet and scan a new pallet?</p>
+            <div class="flex gap-2 justify-end">
+                <button onclick="closeConfirmBox()" class="px-3.5 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-bold text-white">Cancel</button>
+                <button id="confirmActionBtn" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white">Yes, Confirm</button>
+            </div>
+        </div>
+
+        <!-- Collapsible HHD Simulator / Demo Test Bar (For testing without physical scanner) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden">
+            <button onclick="toggleDemoBar()" class="w-full px-3 py-2 flex items-center justify-between text-[11px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-wider">
+                <span>🧪 Scanner Test Simulator (Tap to test barcodes)</span>
+                <span id="demoChevron">▼</span>
+            </button>
+            <div id="demoBarContent" class="hidden px-3 pb-3 pt-1 border-t border-slate-800 space-y-2">
+                <div class="text-[10px] text-slate-400">Tap any sample barcode to simulate hardware HHD scan + Enter:</div>
+                <div class="flex flex-wrap gap-1.5">
+                    <button onclick="simulateScan('PALLETA')" class="px-2.5 py-1.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 mono text-xs font-bold">PALLETA (Valid)</button>
+                    <button onclick="simulateScan('PLT123')" class="px-2.5 py-1.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 mono text-xs font-bold">PLT123 (Invalid)</button>
+                    <button onclick="simulateScan('RACKBINA')" class="px-2.5 py-1.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 mono text-xs font-bold">RACKBINA (Valid)</button>
+                    <button onclick="simulateScan('RACKBINB')" class="px-2.5 py-1.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 mono text-xs font-bold">RACKBINB (Valid)</button>
+                    <button onclick="simulateRandomWID()" class="px-2.5 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 mono text-xs font-bold">X-WID (Valid)</button>
+                    <button onclick="simulateScan('A998877')" class="px-2.5 py-1.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-300 mono text-xs font-bold">A998877 (No X)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Scans & Location Breakdown Section -->
+        <div class="flex-1 bg-slate-800/70 border border-slate-700/80 rounded-xl flex flex-col overflow-hidden min-h-[190px]">
+            <div class="px-3 py-2 bg-slate-900/90 border-b border-slate-700 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-300">Live Scan Log</span>
+                    <span id="locationSummaryChips" class="flex gap-1 overflow-x-auto max-w-[160px]"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="undoLastScan()" id="undoBtn" disabled class="text-[11px] font-bold text-amber-400 hover:text-amber-300 disabled:opacity-30 px-2 py-1 rounded bg-slate-800 border border-slate-700">
+                        ↩ Undo Last
+                    </button>
+                    <button onclick="promptClearBackup()" class="text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2 py-1 rounded bg-slate-800 border border-slate-700">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Table for Recent Scanned WIDs -->
+            <div class="flex-1 overflow-y-auto divide-y divide-slate-700/60" id="scanLogList">
+                <div class="p-6 text-center text-xs text-slate-500">
+                    No WIDs scanned yet. Follow steps above to start mapping.
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        /**
+         * HHD WAREHOUSE PUTAWAY & PALLET MAPPING ENGINE
+         * Pure Vanilla JS for zero latency on Zebra / Honeywell Handheld Terminals
+         */
+
+        // --- STORAGE KEYS ---
+        const STORAGE_BACKUP_KEY = 'hhd_wms_putaway_backup_v1';
+        const STORAGE_SESSION_KEY = 'hhd_wms_active_session_v1';
+
+        // --- APPLICATION STATE ---
+        let state = {
+            step: 'PALLET', // 'PALLET' | 'PUTAWAY' | 'WID'
+            activePalletLoc: '',
+            activePutawayLoc: '',
+            targetQty: 200,
+            soundEnabled: true,
+            // Current pallet's scanned WIDs (Set serialized as Array for duplicate check)
+            currentPalletWIDs: [],
+            // All historical backup records saved permanently until cleared
+            backupRecords: []
+        };
+
+        // --- STRICT REGEX VALIDATORS (Per Requirements #2 & #7) ---
+        // Requirement #7: Pallet & Putaway Locations must ONLY contain Alphabetical characters (A-Z)
+        const LOCATION_REGEX = /^[A-Za-z]+$/;
+        // Requirement #2: WID must ALWAYS start with 'X' or 'x' followed by valid alphanumeric/dash/underscore chars
+        const WID_REGEX = /^[Xx][A-Za-z0-9\-_]+$/;
+
+        // --- WEB AUDIO API SYNTHESIZER (Instant Hardware Beep / Buzz Feedback) ---
+        let audioCtx = null;
+
+        function playTone(type) {
+            if (!state.soundEnabled) return;
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'success') {
+                    // Crisp high-pitched scanner confirmation beep
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(1400, now);
+                    osc.frequency.exponentialRampToValueAtTime(1850, now + 0.08);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+                    osc.start(now);
+                    osc.stop(now + 0.09);
+                } else if (type === 'step') {
+                    // Double-tone chime for Location lock
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(980, now);
+                    osc.frequency.setValueAtTime(1320, now + 0.07);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+                    osc.start(now);
+                    osc.stop(now + 0.16);
+                } else if (type === 'error') {
+                    // Low harsh industrial buzz for invalid barcode / non-X WID / duplicate
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(160, now);
+                    osc.frequency.linearRampToValueAtTime(110, now + 0.28);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.30);
+                    osc.start(now);
+                    osc.stop(now + 0.30);
+                }
+            } catch (e) {
+                // Fail silently if audio blocked
+            }
+        }
+
+        // --- INITIALIZATION & STATE PERSISTENCE ---
+        function initApp() {
+            loadFromStorage();
+            setupScannerListeners();
+            renderUI();
+            refocusInput();
+        }
+
+        function loadFromStorage() {
+            try {
+                const savedBackup = localStorage.getItem(STORAGE_BACKUP_KEY);
+                if (savedBackup) {
+                    state.backupRecords = JSON.parse(savedBackup) || [];
+                }
+                const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
+                if (savedSession) {
+                    const parsed = JSON.parse(savedSession);
+                    state.step = parsed.step || 'PALLET';
+                    state.activePalletLoc = parsed.activePalletLoc || '';
+                    state.activePutawayLoc = parsed.activePutawayLoc || '';
+                    state.targetQty = parsed.targetQty || 200;
+                    state.currentPalletWIDs = parsed.currentPalletWIDs || [];
+                }
+            } catch (err) {
+                console.error('Storage read error:', err);
+            }
+        }
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_BACKUP_KEY, JSON.stringify(state.backupRecords));
+                const sessionPayload = {
+                    step: state.step,
+                    activePalletLoc: state.activePalletLoc,
+                    activePutawayLoc: state.activePutawayLoc,
+                    targetQty: state.targetQty,
+                    currentPalletWIDs: state.currentPalletWIDs
+                };
+                localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionPayload));
+
+                // Pulse backup indicator
+                const statusEl = document.getElementById('backupStatusText');
+                const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                statusEl.textContent = `Saved ${nowTime}`;
+            } catch (err) {
+                showFeedback('error', 'Storage Warning: Browser storage full! Export CSV immediately.');
+            }
+        }
+
+        // --- KEYBOARD WEDGE / HARDWARE SCANNER EVENT HANDLING ---
+        function setupScannerListeners() {
+            const input = document.getElementById('scannerInput');
+
+            // Handle Enter key sent automatically by HHD barcode scanner suffix
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleScanSubmit(input.value);
+                }
+            });
+
+            // Auto-uppercase visually as user/scanner types
+            input.addEventListener('input', function () {
+                const start = input.selectionStart;
+                input.value = input.value.toUpperCase();
+                input.setSelectionRange(start, start);
+            });
+
+            // Keep scanner input focused when tapping non-interactive areas on HHD screen
+            document.addEventListener('click', function (e) {
+                const tag = e.target.tagName.toLowerCase();
+                if (tag !== 'button' && tag !== 'input') {
+                    refocusInput();
+                }
+            });
+        }
+
+        function refocusInput() {
+            const input = document.getElementById('scannerInput');
+            if (input) {
+                input.focus();
+            }
+        }
+
+        function processManualSubmit() {
+            const input = document.getElementById('scannerInput');
+            handleScanSubmit(input.value);
+        }
+
+        // --- CORE SCAN VALIDATION & WORKFLOW ROUTER ---
+        function handleScanSubmit(rawValue) {
+            const input = document.getElementById('scannerInput');
+            const cleanVal = (rawValue || '').trim().toUpperCase();
+            input.value = ''; // Clear immediately for next rapid scan
+
+            if (!cleanVal) {
+                playTone('error');
+                showFeedback('error', 'Empty scan! Please scan a valid barcode.');
+                refocusInput();
+                return;
+            }
+
+            // STEP 1: SCAN PALLET LOCATION (Alphabetical Only)
+            if (state.step === 'PALLET') {
+                if (!LOCATION_REGEX.test(cleanVal)) {
+                    playTone('error');
+                    triggerFlash('error');
+                    showFeedback('error', `REJECTED "${cleanVal}": Pallet Location must be ONLY Alphabetical (A-Z)!`);
+                    refocusInput();
+                    return;
+                }
+
+                state.activePalletLoc = cleanVal;
+                state.step = 'PUTAWAY';
+                state.currentPalletWIDs = [];
+                saveToStorage();
+                playTone('step');
+                triggerFlash('success');
+                showFeedback('success', `Pallet [${cleanVal}] LOCKED. Now scan Putaway Location (A-Z).`);
+                renderUI();
+                refocusInput();
+                return;
+            }
+
+            // STEP 2: SCAN PUTAWAY LOCATION (Alphabetical Only)
+            if (state.step === 'PUTAWAY') {
+                if (!LOCATION_REGEX.test(cleanVal)) {
+                    playTone('error');
+                    triggerFlash('error');
+                    showFeedback('error', `REJECTED "${cleanVal}": Putaway Location must be ONLY Alphabetical (A-Z)!`);
+                    refocusInput();
+                    return;
+                }
+
+                state.activePutawayLoc = cleanVal;
+                state.step = 'WID';
+                saveToStorage();
+                playTone('step');
+                triggerFlash('success');
+                showFeedback('success', `Location [${cleanVal}] active. Scan WIDs starting with "X".`);
+                renderUI();
+                refocusInput();
+                return;
+            }
+
+            // STEP 3: SCAN WIDs (Must start with 'X', no duplicates on active pallet)
+            if (state.step === 'WID') {
+                // Strictly enforce starting with 'X'
+                if (!cleanVal.startsWith('X') || !WID_REGEX.test(cleanVal)) {
+                    playTone('error');
+                    triggerFlash('error');
+                    showFeedback('error', `INVALID WID "${cleanVal}"! WID must start with alphabet "X" only.`);
+                    refocusInput();
+                    return;
+                }
+
+                // Prevent duplicate WID scan on the same active pallet
+                if (state.currentPalletWIDs.includes(cleanVal)) {
+                    playTone('error');
+                    triggerFlash('error');
+                    showFeedback('error', `DUPLICATE WID "${cleanVal}"! Already scanned on Pallet [${state.activePalletLoc}].`);
+                    refocusInput();
+                    return;
+                }
+
+                // Valid WID! Record mapping immediately
+                const seqNo = state.currentPalletWIDs.length + 1;
+                const record = {
+                    id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                    timestamp: formatTimestamp(new Date()),
+                    palletLocation: state.activePalletLoc,
+                    putawayLocation: state.activePutawayLoc,
+                    wid: cleanVal,
+                    sequenceNo: seqNo
+                };
+
+                state.currentPalletWIDs.push(cleanVal);
+                state.backupRecords.unshift(record); // Latest first for UI & CSV
+                saveToStorage();
+
+                playTone('success');
+                triggerFlash('success');
+
+                const target = state.targetQty;
+                if (seqNo >= target) {
+                    showFeedback('success', `TARGET REACHED (${seqNo}/${target})! WID ${cleanVal} → ${state.activePutawayLoc}. Tap "Complete Pallet".`);
+                } else {
+                    showFeedback('success', `MAPPED #${seqNo}: ${cleanVal} → Loc [${state.activePutawayLoc}]`);
+                }
+
+                renderUI();
+                refocusInput();
+            }
+        }
+
+        // --- MULTI-LOCATION LOOP & PALLET COMPLETION HANDLERS ---
+        function handleAddNextLocation() {
+            if (!state.activePalletLoc) return;
+            // Keep activePalletLoc locked, clear Putaway Location, switch step back to PUTAWAY
+            state.activePutawayLoc = '';
+            state.step = 'PUTAWAY';
+            saveToStorage();
+            playTone('step');
+            showFeedback('info', `Pallet [${state.activePalletLoc}] still locked. Scan NEXT Putaway Location (A-Z).`);
+            renderUI();
+            refocusInput();
+        }
+
+        function promptCompletePallet() {
+            if (!state.activePalletLoc) return;
+            const scannedCount = state.currentPalletWIDs.length;
+            showConfirmBox(
+                `Finish Pallet [${state.activePalletLoc}] with ${scannedCount} WIDs mapped and scan a NEW Pallet?`,
+                completeCurrentPallet
+            );
+        }
+
+        function completeCurrentPallet() {
+            closeConfirmBox();
+            const finishedPallet = state.activePalletLoc;
+            const totalMapped = state.currentPalletWIDs.length;
+
+            // Reset session for new pallet while keeping backupRecords intact
+            state.step = 'PALLET';
+            state.activePalletLoc = '';
+            state.activePutawayLoc = '';
+            state.currentPalletWIDs = [];
+            saveToStorage();
+
+            playTone('step');
+            triggerFlash('success');
+            showFeedback('success', `Pallet [${finishedPallet}] Completed (${totalMapped} WIDs). Scan NEW Pallet Location!`);
+            renderUI();
+            refocusInput();
+        }
+
+        function undoLastScan() {
+            if (state.currentPalletWIDs.length === 0 || state.backupRecords.length === 0) return;
+
+            const lastWID = state.currentPalletWIDs.pop();
+            // Remove matching top record from backupRecords
+            const idx = state.backupRecords.findIndex(
+                r => r.wid === lastWID && r.palletLocation === state.activePalletLoc
+            );
+            if (idx !== -1) {
+                state.backupRecords.splice(idx, 1);
+            }
+
+            saveToStorage();
+            playTone('step');
+            showFeedback('info', `Undid last WID scan: ${lastWID}`);
+            renderUI();
+            refocusInput();
+        }
+
+        // --- CSV BACKUP EXPORT (Requirement #6) ---
+        function exportCSV() {
+            if (state.backupRecords.length === 0) {
+                playTone('error');
+                showFeedback('error', 'No backup data available to export yet!');
+                refocusInput();
+                return;
+            }
+
+            // Export in chronological order (oldest to newest)
+            const chronological = [...state.backupRecords].reverse();
+            const headers = ['Timestamp', 'Pallet_Location', 'Putaway_Location', 'WID', 'Sequence_No'];
+            const csvRows = [headers.join(',')];
+
+            chronological.forEach(row => {
+                const line = [
+                    `"${row.timestamp}"`,
+                    `"${row.palletLocation}"`,
+                    `"${row.putawayLocation}"`,
+                    `"${row.wid}"`,
+                    row.sequenceNo
+                ].join(',');
+                csvRows.push(line);
+            });
+
+            const csvString = csvRows.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const now = new Date();
+            const fileStamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `WMS_Putaway_Backup_${fileStamp}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            playTone('success');
+            showFeedback('success', `Exported ${chronological.length} mapped WIDs to CSV backup!`);
+            refocusInput();
+        }
+
+        function promptClearBackup() {
+            showConfirmBox(
+                '⚠️ Delete ALL saved backup logs and reset current session? Export CSV first if needed!',
+                clearAllBackupData
+            );
+        }
+
+        function clearAllBackupData() {
+            closeConfirmBox();
+            state.step = 'PALLET';
+            state.activePalletLoc = '';
+            state.activePutawayLoc = '';
+            state.currentPalletWIDs = [];
+            state.backupRecords = [];
+            localStorage.removeItem(STORAGE_BACKUP_KEY);
+            localStorage.removeItem(STORAGE_SESSION_KEY);
+
+            playTone('step');
+            showFeedback('info', 'All backup data cleared. Ready for new Pallet Location.');
+            renderUI();
+            refocusInput();
+        }
+
+        // --- UI RENDERING & VISUAL FEEDBACK HELPERS ---
+        function renderUI() {
+            const palletCard = document.getElementById('palletCard');
+            const putawayCard = document.getElementById('putawayCard');
+            const displayPallet = document.getElementById('displayPalletLoc');
+            const displayPutaway = document.getElementById('displayPutawayLoc');
+            const lockBadge = document.getElementById('palletLockBadge');
+            const stepInstruction = document.getElementById('stepInstruction');
+            const ruleHintBadge = document.getElementById('ruleHintBadge');
+            const scannerInput = document.getElementById('scannerInput');
+            const addNextLocBtn = document.getElementById('addNextLocBtn');
+            const completePalletBtn = document.getElementById('completePalletBtn');
+            const undoBtn = document.getElementById('undoBtn');
+
+            // Update Pallet Card
+            if (state.activePalletLoc) {
+                displayPallet.textContent = state.activePalletLoc;
+                displayPallet.className = 'mono text-lg font-extrabold text-emerald-400 truncate';
+                lockBadge.textContent = 'LOCKED';
+                lockBadge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300';
+                palletCard.className = 'bg-slate-800/90 border-2 border-emerald-500/70 rounded-xl p-2.5 transition-all';
+            } else {
+                displayPallet.textContent = '---';
+                displayPallet.className = 'mono text-lg font-extrabold text-amber-400 truncate';
+                lockBadge.textContent = 'STEP 1';
+                lockBadge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300';
+                palletCard.className = 'bg-slate-800/90 border-2 border-amber-500 rounded-xl p-2.5 transition-all';
+            }
+
+            // Update Putaway Location Card
+            if (state.activePutawayLoc) {
+                displayPutaway.textContent = state.activePutawayLoc;
+                displayPutaway.className = 'mono text-lg font-extrabold text-sky-400 truncate';
+                putawayCard.className = 'bg-slate-800/90 border-2 border-sky-500/70 rounded-xl p-2.5 transition-all';
+            } else {
+                displayPutaway.textContent = '---';
+                displayPutaway.className = 'mono text-lg font-extrabold text-slate-500 truncate';
+                putawayCard.className = state.step === 'PUTAWAY'
+                    ? 'bg-slate-800/90 border-2 border-amber-500 rounded-xl p-2.5 transition-all'
+                    : 'bg-slate-800/90 border-2 border-slate-700 rounded-xl p-2.5 transition-all';
+            }
+
+            // Update Step Instructions & Input Placeholder
+            if (state.step === 'PALLET') {
+                stepInstruction.innerHTML = '<span>▶ STEP 1: SCAN PALLET LOCATION</span>';
+                stepInstruction.className = 'text-xs sm:text-sm font-extrabold uppercase tracking-wide text-amber-400 flex items-center gap-1.5';
+                ruleHintBadge.textContent = 'A-Z ONLY';
+                scannerInput.placeholder = 'Scan Pallet Loc (A-Z)...';
+            } else if (state.step === 'PUTAWAY') {
+                stepInstruction.innerHTML = '<span>▶ STEP 2: SCAN PUTAWAY LOCATION</span>';
+                stepInstruction.className = 'text-xs sm:text-sm font-extrabold uppercase tracking-wide text-amber-400 flex items-center gap-1.5';
+                ruleHintBadge.textContent = 'A-Z ONLY';
+                scannerInput.placeholder = 'Scan Putaway Loc (A-Z)...';
+            } else if (state.step === 'WID') {
+                stepInstruction.innerHTML = '<span>▶ STEP 3: SCAN WID (STARTS WITH X)</span>';
+                stepInstruction.className = 'text-xs sm:text-sm font-extrabold uppercase tracking-wide text-emerald-400 flex items-center gap-1.5';
+                ruleHintBadge.textContent = 'STARTS WITH "X"';
+                scannerInput.placeholder = 'Scan WID (e.g. X10023)...';
+            }
+
+            // Button States
+            addNextLocBtn.disabled = !state.activePalletLoc || state.step === 'PUTAWAY';
+            completePalletBtn.disabled = !state.activePalletLoc;
+            undoBtn.disabled = state.currentPalletWIDs.length === 0;
+
+            // Counters & Breakdown
+            document.getElementById('palletScannedCount').textContent = state.currentPalletWIDs.length;
+            document.getElementById('targetQtyInput').value = state.targetQty;
+            document.getElementById('totalBackupCount').textContent = state.backupRecords.length;
+
+            // Calculate per-location counts for active pallet
+            const currentPalletRecords = state.backupRecords.filter(r => r.palletLocation === state.activePalletLoc);
+            const locMap = {};
+            currentPalletRecords.forEach(r => {
+                locMap[r.putawayLocation] = (locMap[r.putawayLocation] || 0) + 1;
+            });
+
+            const uniqueBins = Object.keys(locMap);
+            document.getElementById('binsUsedCount').textContent = uniqueBins.length;
+
+            const activeBinQty = state.activePutawayLoc ? (locMap[state.activePutawayLoc] || 0) : 0;
+            document.getElementById('putawayBinCount').textContent = `${activeBinQty} Qty`;
+
+            // Render compact location chips
+            const chipsContainer = document.getElementById('locationSummaryChips');
+            chipsContainer.innerHTML = uniqueBins.map(bin =>
+                `<span class="text-[10px] mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 border border-slate-700">${bin}:${locMap[bin]}</span>`
+            ).join('');
+
+            // Render Recent Scans List (Top 40 for ultra-fast HHD DOM performance)
+            const logList = document.getElementById('scanLogList');
+            if (state.backupRecords.length === 0) {
+                logList.innerHTML = `<div class="p-6 text-center text-xs text-slate-500">No WIDs scanned yet. Follow steps above to start mapping.</div>`;
+            } else {
+                const recentSlice = state.backupRecords.slice(0, 40);
+                logList.innerHTML = recentSlice.map(item => `
+                    <div class="px-3 py-2 flex items-center justify-between text-xs hover:bg-slate-800/60">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700">#${item.sequenceNo}</span>
+                            <span class="mono font-extrabold text-emerald-400 truncate">${escapeHTML(item.wid)}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="mono text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">${escapeHTML(item.palletLocation)}</span>
+                            <span class="text-slate-500">→</span>
+                            <span class="mono text-[11px] font-bold px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">${escapeHTML(item.putawayLocation)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function showFeedback(type, message) {
+            const banner = document.getElementById('feedbackBanner');
+            const icon = document.getElementById('feedbackIcon');
+            const text = document.getElementById('feedbackText');
+
+            text.textContent = message;
+
+            if (type === 'error') {
+                banner.className = 'mt-2.5 px-3 py-2 rounded-xl bg-rose-950/90 border border-rose-500 text-xs font-bold text-rose-200 flex items-center gap-2 min-h-[38px]';
+                icon.textContent = '⛔';
+            } else if (type === 'success') {
+                banner.className = 'mt-2.5 px-3 py-2 rounded-xl bg-emerald-950/90 border border-emerald-500 text-xs font-bold text-emerald-200 flex items-center gap-2 min-h-[38px]';
+                icon.textContent = '✅';
+            } else {
+                banner.className = 'mt-2.5 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-2 min-h-[38px]';
+                icon.textContent = 'ℹ️';
+            }
+        }
+
+        function triggerFlash(type) {
+            const main = document.getElementById('mainContainer');
+            main.classList.remove('scan-success-flash', 'scan-error-flash');
+            void main.offsetWidth; // Force reflow
+            main.classList.add(type === 'success' ? 'scan-success-flash' : 'scan-error-flash');
+        }
+
+        function showConfirmBox(msg, onConfirmCallback) {
+            const box = document.getElementById('confirmBox');
+            document.getElementById('confirmMessage').textContent = msg;
+            const actionBtn = document.getElementById('confirmActionBtn');
+            actionBtn.onclick = onConfirmCallback;
+            box.classList.remove('hidden');
+        }
+
+        function closeConfirmBox() {
+            document.getElementById('confirmBox').classList.add('hidden');
+            refocusInput();
+        }
+
+        function updateTargetQty() {
+            const val = parseInt(document.getElementById('targetQtyInput').value, 10);
+            if (val && val > 0) {
+                state.targetQty = val;
+                saveToStorage();
+            }
+            refocusInput();
+        }
+
+        function toggleSound() {
+            state.soundEnabled = !state.soundEnabled;
+            document.getElementById('soundIcon').textContent = state.soundEnabled ? '🔊' : '🔇';
+            if (state.soundEnabled) playTone('success');
+            refocusInput();
+        }
+
+        function toggleDemoBar() {
+            const content = document.getElementById('demoBarContent');
+            const chevron = document.getElementById('demoChevron');
+            const isHidden = content.classList.contains('hidden');
+            content.classList.toggle('hidden');
+            chevron.textContent = isHidden ? '▲' : '▼';
+            refocusInput();
+        }
+
+        // --- DEMO SIMULATOR HELPERS ---
+        function simulateScan(barcode) {
+            handleScanSubmit(barcode);
+        }
+
+        function simulateRandomWID() {
+            const randomNum = Math.floor(100000 + Math.random() * 900000);
+            handleScanSubmit('X' + randomNum);
+        }
+
+        // --- UTILITIES ---
+        function formatTimestamp(date) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        function escapeHTML(str) {
+            return String(str).replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[m]);
+        }
+
+        // Start application immediately on load
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
