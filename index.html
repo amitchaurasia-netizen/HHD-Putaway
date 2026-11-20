@@ -435,7 +435,9 @@
       </div>
       <div class="hdr-actions">
         <button type="button" id="soundBtn" class="icon-btn" onclick="toggleSound()" title="Toggle Sound">🔊</button>
-        <!-- CSV Export: Strictly visible ONLY to Owner -->
+        <!-- Merge & CSV Export: Strictly visible ONLY to Owner -->
+        <button type="button" id="mergeBtn" class="csv-btn hidden" style="background:#38bdf8;color:#082f49;" onclick="triggerMergeCSV()" title="Merge multiple HHD CSV files">📂 Merge</button>
+        <input type="file" id="mergeCsvInput" accept=".csv" multiple class="hidden" onchange="handleMergeFiles(event)" />
         <button type="button" id="csvBtn" class="csv-btn hidden" onclick="exportCSV()">⬇ CSV (0)</button>
       </div>
     </div>
@@ -675,17 +677,20 @@
   function applyRolePermissions() {
     const ownerAccess = isOwner();
     const csvBtn = document.getElementById('csvBtn');
+    const mergeBtn = document.getElementById('mergeBtn');
     const clearBtn = document.getElementById('clearAllBtn');
     const empBar = document.getElementById('empBar');
     const nameEl = document.getElementById('empNameDisplay');
 
     if (ownerAccess) {
       csvBtn.classList.remove('hidden');
+      mergeBtn.classList.remove('hidden');
       clearBtn.classList.remove('hidden');
       empBar.classList.add('owner-mode');
       nameEl.innerHTML = currentUser.name + ' (' + currentUser.casper + ') <span class="owner-tag">OWNER</span>';
     } else {
       csvBtn.classList.add('hidden');
+      mergeBtn.classList.add('hidden');
       clearBtn.classList.add('hidden');
       empBar.classList.remove('owner-mode');
       nameEl.textContent = currentUser.name + ' (' + currentUser.casper + ')';
@@ -963,6 +968,108 @@
     focusScanner();
   }
 
+  function triggerMergeCSV() {
+    if (!isOwner()) {
+      playTone('err');
+      setMsg('⛔ Access Denied: Only Owner can merge CSV files.', 'err');
+      return;
+    }
+    const fileInp = document.getElementById('mergeCsvInput');
+    fileInp.value = '';
+    fileInp.click();
+  }
+
+  function parseCSVLine(line) {
+    const res = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        res.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    res.push(cur.trim());
+    return res;
+  }
+
+  async function handleMergeFiles(event) {
+    if (!isOwner()) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    let addedCount = 0;
+    let invalidCount = 0;
+    const newlyMerged = [];
+
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length <= 1) continue;
+
+        const headerCols = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const idxDate = headerCols.indexOf('date');
+        const idxTime = headerCols.indexOf('time');
+        const idxCasper = headerCols.indexOf('operator_casper_id');
+        const idxName = headerCols.indexOf('operator_name');
+        const idxPallet = headerCols.indexOf('pallet_location');
+        const idxPutaway = headerCols.indexOf('putaway_location');
+        const idxWid = headerCols.indexOf('wid');
+
+        if (idxWid === -1 || idxPallet === -1 || idxPutaway === -1) {
+          invalidCount++;
+          continue;
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          const wid = (cols[idxWid] || '').toUpperCase().trim();
+          const palletLoc = (cols[idxPallet] || '').toUpperCase().trim();
+          const putawayLoc = (cols[idxPutaway] || '').toUpperCase().trim();
+          if (!wid && !palletLoc && !putawayLoc) continue;
+
+          addedCount++;
+          newlyMerged.push({
+            id: String(Date.now()) + '_m_' + addedCount + '_' + Math.random().toString(36).slice(2, 6),
+            wid: wid,
+            palletLoc: palletLoc,
+            putawayLoc: putawayLoc,
+            casperId: idxCasper !== -1 ? (cols[idxCasper] || '') : '',
+            empName: idxName !== -1 ? (cols[idxName] || '') : '',
+            date: idxDate !== -1 ? (cols[idxDate] || '') : '',
+            time: idxTime !== -1 ? (cols[idxTime] || '') : ''
+          });
+        }
+      } catch (err) {
+        invalidCount++;
+      }
+    }
+
+    if (newlyMerged.length > 0) {
+      state.records = [...newlyMerged.reverse(), ...state.records];
+      saveState();
+      renderUI();
+    }
+
+    playTone(addedCount > 0 ? 'ok' : 'err');
+    let summary = '📂 Merged ' + files.length + ' file(s): +' + addedCount + ' records added (0 skipped)';
+    if (invalidCount > 0) summary += ', ' + invalidCount + ' invalid file(s) ignored';
+    summary += '. Total: ' + state.records.length;
+    setMsg(summary, addedCount > 0 ? 'ok' : 'warn');
+    focusScanner();
+  }
+
   function exportCSV() {
     if (!isOwner()) {
       playTone('err');
@@ -1022,9 +1129,11 @@
     // Enforce strict Owner-only visibility on every render
     if (isOwner()) {
       document.getElementById('csvBtn').classList.remove('hidden');
+      document.getElementById('mergeBtn').classList.remove('hidden');
       document.getElementById('clearAllBtn').classList.remove('hidden');
     } else {
       document.getElementById('csvBtn').classList.add('hidden');
+      document.getElementById('mergeBtn').classList.add('hidden');
       document.getElementById('clearAllBtn').classList.add('hidden');
     }
 
